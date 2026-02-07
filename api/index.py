@@ -23,7 +23,7 @@ from ._lib.storage import Storage, StorageConfig
 
 APP_NAME = "truthOS-meeting-intelligence"
 
-# CORS: set CORS_ORIGINS in Vercel (e.g. https://your-app.vercel.app).
+# CORS: set CORS_ORIGINS in Vercel. Regex allows any truth-os-app Vercel URL (prod + previews).
 _cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
 _cors_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
@@ -31,9 +31,11 @@ app = FastAPI(title=APP_NAME)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_list,
+    allow_origin_regex=r"https://truth-os-app(-.*)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 router = FastAPI(title=APP_NAME)
 
