@@ -7,9 +7,13 @@ from dotenv import load_dotenv
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
-# Load .env from repo root or api/ so OPENAI_API_KEY is available
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-load_dotenv(Path(__file__).resolve().parent / ".env")
+# Load .env from repo root or api/ when present (Vercel uses env vars, no .env file)
+_api_dir = Path(__file__).resolve().parent
+_root = _api_dir.parent
+for p in (_root / ".env", _api_dir / ".env"):
+    if p.exists():
+        load_dotenv(p)
+        break
 from fastapi.middleware.cors import CORSMiddleware
 
 from ._lib.agent import default_agent
