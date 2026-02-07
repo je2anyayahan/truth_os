@@ -107,5 +107,17 @@ def fetch_contact_meetings(
     return ContactMeetingsResponse(contactId=contactId, meetings=meetings, analyses=analyses)
 
 
+@router.get("")
+@router.get("/")
+def api_root():
+    """So /api and /api/ return info; use /api/docs for Swagger."""
+    return {
+        "app": APP_NAME,
+        "docs": "/api/docs",
+        "openapi": "/api/openapi.json",
+        "endpoints": ["POST /api/meetings", "POST /api/meetings/{meetingId}/analyze", "GET /api/contacts/{contactId}/meetings"],
+    }
+
+
 app.mount("/api", router)
 
