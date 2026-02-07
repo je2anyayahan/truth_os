@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,10 +19,14 @@ from ._lib.storage import Storage, StorageConfig
 
 APP_NAME = "truthOS-meeting-intelligence"
 
+# CORS: set CORS_ORIGINS in Vercel (e.g. https://your-app.vercel.app).
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
+_cors_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+
 app = FastAPI(title=APP_NAME)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_cors_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -30,8 +35,9 @@ router = FastAPI(title=APP_NAME)
 
 
 def _storage() -> Storage:
-    # SQLite file is local dev friendly; on Vercel, filesystem is ephemeral but ok for demo.
-    db_path = Path(__file__).parent / "truthos.sqlite3"
+    # Local: api/truthos.sqlite3. Vercel: /tmp (ephemeral; use a real DB for production).
+    base = Path("/tmp") if os.environ.get("VERCEL") else Path(__file__).parent
+    db_path = base / "truthos.sqlite3"
     return Storage(StorageConfig(db_path=db_path))
 
 
