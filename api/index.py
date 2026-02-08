@@ -184,4 +184,6 @@ def api_root():
 
 
 app.mount("/api", router)
+# If Vercel strips /api and passes e.g. /contacts/c1/meetings, still handle it.
+app.mount("/", router)
 
