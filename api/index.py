@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -33,6 +34,10 @@ _cors_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 _cors_regex = re.compile(r"https://truth-os-app(-.*)?\.vercel\.app")
 
 
+# Fallback when Origin is missing (e.g. some proxies strip it): allow known frontend.
+_CORS_FALLBACK_ORIGIN = "https://truth-os-app.vercel.app"
+
+
 def _is_allowed_origin(origin: str | None) -> bool:
     if not origin:
         return False
@@ -41,16 +46,31 @@ def _is_allowed_origin(origin: str | None) -> bool:
     return bool(_cors_regex.fullmatch(origin))
 
 
+def _cors_allow_origin(origin: str | None) -> str | None:
+    """Return the origin to put in Access-Control-Allow-Origin, or None."""
+    if _is_allowed_origin(origin):
+        return origin
+    return _CORS_FALLBACK_ORIGIN if _cors_regex.fullmatch(_CORS_FALLBACK_ORIGIN) else None
+
+
 class PreflightCORSMiddleware(BaseHTTPMiddleware):
     """Ensure OPTIONS preflight always returns CORS headers (runs first)."""
 
     async def dispatch(self, request: Request, call_next):
-        origin = request.headers.get("origin")
-        if request.method == "OPTIONS" and _is_allowed_origin(origin):
+        origin = request.headers.get("origin") or request.headers.get("referer", "").rstrip("/")
+        if origin and "/" in origin:
+            # referer is full URL; extract origin (scheme + host)
+            try:
+                p = urlparse(origin)
+                origin = f"{p.scheme}://{p.netloc}" if p.scheme and p.netloc else request.headers.get("origin")
+            except Exception:
+                origin = request.headers.get("origin")
+        if request.method == "OPTIONS":
+            allow_origin = _cors_allow_origin(origin) or _CORS_FALLBACK_ORIGIN
             return Response(
                 status_code=200,
                 headers={
-                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Origin": allow_origin,
                     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                     "Access-Control-Allow-Headers": "*",
                     "Access-Control-Allow-Credentials": "true",
