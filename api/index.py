@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 # Load .env from repo root or api/ when present (Vercel uses env vars, no .env file)
 _api_dir = Path(__file__).resolve().parent
@@ -14,7 +19,6 @@ for p in (_root / ".env", _api_dir / ".env"):
     if p.exists():
         load_dotenv(p)
         break
-from fastapi.middleware.cors import CORSMiddleware
 
 from ._lib.agent import default_agent
 from ._lib.auth import User, get_user, require_operator
@@ -26,6 +30,39 @@ APP_NAME = "truthOS-meeting-intelligence"
 # CORS: set CORS_ORIGINS in Vercel. Regex allows any truth-os-app Vercel URL (prod + previews).
 _cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
 _cors_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+_cors_regex = re.compile(r"https://truth-os-app(-.*)?\.vercel\.app")
+
+
+def _is_allowed_origin(origin: str | None) -> bool:
+    if not origin:
+        return False
+    if origin in _cors_list:
+        return True
+    return bool(_cors_regex.fullmatch(origin))
+
+
+class PreflightCORSMiddleware(BaseHTTPMiddleware):
+    """Ensure OPTIONS preflight always returns CORS headers (runs first)."""
+
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        if request.method == "OPTIONS" and _is_allowed_origin(origin):
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "86400",
+                },
+            )
+        response = await call_next(request)
+        if origin and _is_allowed_origin(origin):
+            response.headers.setdefault("Access-Control-Allow-Origin", origin)
+            response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        return response
+
 
 app = FastAPI(title=APP_NAME)
 app.add_middleware(
@@ -37,6 +74,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+app.add_middleware(PreflightCORSMiddleware)  # runs first: OPTIONS → 200 + CORS
 router = FastAPI(title=APP_NAME)
 
 
