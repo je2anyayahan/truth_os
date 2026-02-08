@@ -95,6 +95,24 @@ app.add_middleware(
     expose_headers=["*"],
 )
 app.add_middleware(PreflightCORSMiddleware)  # runs first: OPTIONS → 200 + CORS
+
+
+class VercelPathRestoreMiddleware(BaseHTTPMiddleware):
+    """Vercel rewrites send /api/:path* to /api with path as query param; restore path for routing."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        query_path = request.query_params.get("path")
+        if path == "/api" and query_path is not None:
+            new_path = f"/api/{query_path.lstrip('/')}"
+            scope = dict(request.scope)
+            scope["path"] = new_path
+            scope["raw_path"] = new_path.encode()
+            request = Request(scope)
+        return await call_next(request)
+
+
+app.add_middleware(VercelPathRestoreMiddleware)
 router = FastAPI(title=APP_NAME)
 
 
